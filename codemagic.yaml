@@ -74,7 +74,8 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       xcode: 15
-      unity: 2022.3.13f1
+      unity: 2022.2.16f1
+      #unity: 2022.3.13f1
       android_signing:
         - kraken_keystore
       groups:
