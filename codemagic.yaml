@@ -78,7 +78,7 @@ workflows:
         - kraken_keystore
       groups:
         - unity_credentials
-        - google_play
+        - google_credentials
       vars:
         BUILD_SCRIPT: BuildAndroid
         PACKAGE_NAME: "io.codemagic.unity2022"
