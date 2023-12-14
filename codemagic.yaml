@@ -1,0 +1,125 @@
+workflows:
+  unity-ios-workflow:
+    name: Unity iOS Workflow
+    instance_type: mac_mini_m1
+    max_build_duration: 120
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: io.codemagic.unitysample
+      groups:
+        - unity_credentials
+      vars:
+        BUILD_SCRIPT: BuildIos
+        UNITY_IOS_DIR: ios
+        XCODE_PROJECT: "Unity-iPhone.xcodeproj"
+        XCODE_SCHEME: "Unity-iPhone"
+        APP_STORE_APP_ID: 1555555551
+      cocoapods: default
+    scripts:
+      - name: Activate Unity License
+        script: |
+          $UNITY_HOME/Contents/MacOS/Unity -batchmode -quit -logFile \
+            -serial ${UNITY_SERIAL?} \
+            -username ${UNITY_EMAIL?} \
+            -password ${UNITY_PASSWORD?}
+      - name: Generate the Xcode project from Unity
+        script: |
+          $UNITY_HOME/Contents/MacOS/Unity -batchmode \
+            -quit \
+            -logFile \
+            -projectPath . \
+            -executeMethod BuildScript.$BUILD_SCRIPT \
+            -nographics
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
+      - name: Increment build number
+        script: |
+          BUILD_NUMBER=($(app-store-connect get-latest-app-store-build-number "$APP_ID") + 1)
+          cd $UNITY_IOS_DIR
+          agvtool new-version -all $BUILD_NUMBER
+      - name: Build ipa for distribution
+        script: |
+          xcode-project build-ipa \
+            --project "$UNITY_IOS_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      scripts:
+        - name: Deactivate Unity License
+          script: | 
+            /Applications/Unity\ Hub.app/Contents/Frameworks/UnityLicensingClient_V1.app/Contents/MacOS/Unity.Licensing.Client \
+            --return-ulf \
+            --username ${UNITY_EMAIL?} \
+            --password ${UNITY_PASSWORD?}
+      email:
+        recipients:
+          - david@nevercode.io
+        notify:
+          success: true
+          failure: false
+      app_store_connect:
+        auth: integration
+        submit_to_app_store: true
+
+
+  unity-android-workflow:
+    name: Unity Android Workflow
+    max_build_duration: 120
+    environment:
+      xcode: 15
+      unity: 2022.3.13f1
+      android_signing:
+        - kraken_keystore
+      groups:
+        - unity_credentials
+        - google_play
+      vars:
+        BUILD_SCRIPT: BuildAndroid
+        PACKAGE_NAME: "io.codemagic.unity2022"
+        GOOGLE_PLAY_TRACK: alpha
+    scripts:
+      - name: Activate Unity License
+        script: |
+          $UNITY_HOME/Contents/MacOS/Unity -batchmode -quit -logFile \
+            -serial ${UNITY_SERIAL?} \
+            -username ${UNITY_EMAIL?} \
+            -password ${UNITY_PASSWORD?}
+      - name: Set build number
+        script: |
+          export NEW_BUILD_NUMBER=$(($(google-play get-latest-build-number \
+            --package-name "$PACKAGE_NAME" \
+            --tracks="$GOOGLE_PLAY_TRACK") + 1))
+      - name: Build the project
+        script: |
+          $UNITY_HOME/Contents/MacOS/Unity -batchmode \
+            -quit \
+            -logFile \
+            -projectPath . \
+            -executeMethod BuildScript.$BUILD_SCRIPT \
+            -nographics
+    artifacts:
+      - android/*.aab
+    publishing:
+      scripts:
+        - name: Deactivate Unity License
+          script: | 
+            /Applications/Unity\ Hub.app/Contents/Frameworks/UnityLicensingClient_V1.app/Contents/MacOS/Unity.Licensing.Client \
+            --return-ulf \
+            --username ${UNITY_EMAIL?} \
+            --password ${UNITY_PASSWORD?}
+      email:
+        recipients:
+          - david@nevercode.io
+        notify:
+          success: true
+          failure: false
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: GOOGLE_PLAY_TRACK
+        submit_as_draft: true
